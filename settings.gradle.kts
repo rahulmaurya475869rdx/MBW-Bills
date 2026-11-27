@@ -11,6 +11,8 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        // JitPack repository add karna zaroori hai uCrop ke liye
+        maven { url = uri("https://jitpack.io") }
     }
 }
 
