@@ -4,7 +4,6 @@ import android.app.Activity
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -182,7 +181,6 @@ fun ImageListSection(
                 .withMaxResultSize(1600, 2000)
                 .withOptions(UCrop.Options().apply {
                     setFreeStyleCropEnabled(true)
-                    setAutoRotateEnabled(true)
                     setCompressionFormat(android.graphics.Bitmap.CompressFormat.JPEG)
                     setCompressionQuality(85)
                 })
