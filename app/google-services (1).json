@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "678518060960",
+    "project_id": "mbwbill-8d1c2",
+    "storage_bucket": "mbwbill-8d1c2.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:678518060960:android:c4ea1b0dc1d6386387d6c5",
+        "android_client_info": {
+          "package_name": "com.mbwbill.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDHnej53lhPV6JJq9L4TRPE9AKanY1AHUE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
