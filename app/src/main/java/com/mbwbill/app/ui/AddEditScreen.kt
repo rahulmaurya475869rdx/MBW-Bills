@@ -1,7 +1,11 @@
 package com.mbwbill.app.ui
 
-import android.app.Activity
+import android.Manifest
+import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
@@ -20,6 +24,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import coil.compose.AsyncImage
 import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions
@@ -131,7 +137,10 @@ fun AddEditScreen(
 
             Button(
                 onClick = {
-                    if (name.isBlank() || mobile.isBlank() || serialNo.isBlank()) return@Button
+                    if (name.isBlank() || mobile.isBlank() || serialNo.isBlank()) {
+                        Toast.makeText(context, "Naam, Mobile aur Serial No bharna zaroori hai!", Toast.LENGTH_SHORT).show()
+                        return@Button
+                    }
                     val c = Customer(
                         id = customerId,
                         name = name.trim(),
@@ -144,7 +153,10 @@ fun AddEditScreen(
                         warrantyImages = Gson().toJson(warrantyImages),
                         synced = false
                     )
-                    viewModel.save(c) { onBack() }
+                    viewModel.save(c) { 
+                        Toast.makeText(context, "Saved Successfully", Toast.LENGTH_SHORT).show()
+                        onBack() 
+                    }
                 },
                 modifier = Modifier.fillMaxWidth().height(52.dp)
             ) { Text("Save", fontSize = 16.sp) }
@@ -161,38 +173,57 @@ fun ImageListSection(
     onRemove: (Int) -> Unit
 ) {
     val context = LocalContext.current
+    var showSourceDialog by remember { mutableStateOf(false) }
+    var tempCameraUri by remember { mutableStateOf<Uri?>(null) }
+
     val cropLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
-        if (result.resultCode == Activity.RESULT_OK && result.data != null) {
+        if (result.resultCode == android.app.Activity.RESULT_OK && result.data != null) {
             val outUri = UCrop.getOutput(result.data!!)
             if (outUri != null) {
                 val path = ImageUtils.compressAndSave(context, outUri)
-                if (path.isNotEmpty()) onAdd(path)
+                if (path.isNotEmpty()) onAdd(path) else {
+                    Toast.makeText(context, "Image process failed", Toast.LENGTH_SHORT).show()
+                }
             }
         }
     }
+
     val pickLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
-        if (uri != null) {
-            val dest = File(context.cacheDir, "crop_${System.currentTimeMillis()}.jpg")
-            val intent = UCrop.of(uri, Uri.fromFile(dest))
-                .withMaxResultSize(1600, 2000)
-                .withOptions(UCrop.Options().apply {
-                    setFreeStyleCropEnabled(true)
-                    setCompressionFormat(android.graphics.Bitmap.CompressFormat.JPEG)
-                    setCompressionQuality(85)
-                })
-                .getIntent(context)
-            cropLauncher.launch(intent)
+        if (uri != null) startCrop(context, uri, cropLauncher)
+    }
+
+    val cameraLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.TakePicture()
+    ) { success ->
+        if (success && tempCameraUri != null) {
+            startCrop(context, tempCameraUri!!, cropLauncher)
+        }
+    }
+
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            try {
+                val tempFile = File(context.cacheDir, "camera_${System.currentTimeMillis()}.jpg")
+                tempCameraUri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", tempFile)
+                cameraLauncher.launch(tempCameraUri!!)
+            } catch (e: Exception) {
+                Toast.makeText(context, "Camera error: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
+        } else {
+            Toast.makeText(context, "Camera permission required", Toast.LENGTH_SHORT).show()
         }
     }
 
     Column {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(label, modifier = Modifier.weight(1f), fontSize = 14.sp)
-            Button(onClick = { pickLauncher.launch("image/*") }) { Text("+ Add") }
+            Button(onClick = { showSourceDialog = true }) { Text("+ Add") }
         }
         if (images.isNotEmpty()) {
             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -211,6 +242,54 @@ fun ImageListSection(
                 }
             }
         }
+    }
+
+    if (showSourceDialog) {
+        AlertDialog(
+            onDismissRequest = { showSourceDialog = false },
+            title = { Text("Image Source Choose Karein") },
+            text = { Text("Camera se photo lein ya gallery se select karein") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showSourceDialog = false
+                    val permissionCheckResult = ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA)
+                    if (permissionCheckResult == PackageManager.PERMISSION_GRANTED) {
+                        val tempFile = File(context.cacheDir, "camera_${System.currentTimeMillis()}.jpg")
+                        tempCameraUri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", tempFile)
+                        cameraLauncher.launch(tempCameraUri!!)
+                    } else {
+                        cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+                    }
+                }) { Text("Camera") }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showSourceDialog = false
+                    pickLauncher.launch("image/*")
+                }) { Text("Gallery") }
+            }
+        )
+    }
+}
+
+private fun startCrop(context: Context, sourceUri: Uri, cropLauncher: androidx.activity.result.ActivityResultLauncher<Intent>) {
+    try {
+        val destFile = File(context.cacheDir, "crop_${System.currentTimeMillis()}.jpg")
+        val destUri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", destFile)
+
+        val intent = UCrop.of(sourceUri, destUri)
+            .withMaxResultSize(1600, 2000)
+            .withOptions(UCrop.Options().apply {
+                setFreeStyleCropEnabled(true)
+                setCompressionFormat(android.graphics.Bitmap.CompressFormat.JPEG)
+                setCompressionQuality(85)
+            })
+            .getIntent(context)
+            
+        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+        cropLauncher.launch(intent)
+    } catch (e: Exception) {
+        Toast.makeText(context, "Crop error: ${e.message}", Toast.LENGTH_LONG).show()
     }
 }
 
