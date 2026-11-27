@@ -29,8 +29,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun save(c: Customer, onDone: () -> Unit) {
         viewModelScope.launch {
-            if (c.id == 0L) repo.insert(c) else repo.update(c)
-            onDone()
+            try {
+                if (c.id == 0L) repo.insert(c) else repo.update(c)
+                onDone()
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         }
     }
 
