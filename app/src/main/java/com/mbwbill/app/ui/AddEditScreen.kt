@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -45,6 +46,7 @@ import com.mbwbill.app.data.Customer
 import com.mbwbill.app.util.ImageUtils
 import com.mbwbill.app.viewmodel.MainViewModel
 import com.yalantis.ucrop.UCrop
+import kotlinx.coroutines.launch
 import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -58,13 +60,20 @@ fun AddEditScreen(
     onScannedConsumed: () -> Unit
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     var name by remember { mutableStateOf("") }
     var address by remember { mutableStateOf("") }
     var mobile by remember { mutableStateOf("") }
     
-    // Multiple Serial Numbers
-    var serialList by remember { mutableStateOf(listOf("")) }
-    var scanIndex by rememberSaveable { mutableStateOf(0) } // Yahan fix kiya
+    var originalCreatedAt by remember { mutableLongStateOf(0L) }
+
+    // rememberSaveable use kiya taaki scan ke baad state na ude
+    val listSaver = listSaver<List<String>, String>(
+        save = { it },
+        restore = { it }
+    )
+    var serialList by rememberSaveable(stateSaver = listSaver) { mutableStateOf(listOf("")) }
+    var scanIndex by rememberSaveable { mutableIntStateOf(0) }
     
     var dateOfSale by remember { mutableStateOf("") }
     var dateOfInvoice by remember { mutableStateOf("") }
@@ -77,7 +86,7 @@ fun AddEditScreen(
         if (scannedSerial.isNotBlank()) {
             val newList = serialList.toMutableList()
             while (newList.size <= scanIndex) {
-                newList.add("") // Ensure list size is enough
+                newList.add("")
             }
             newList[scanIndex] = scannedSerial
             serialList = newList
@@ -88,8 +97,9 @@ fun AddEditScreen(
     LaunchedEffect(customerId) {
         if (customerId > 0) {
             viewModel.getById(customerId)?.let { c ->
+                originalCreatedAt = c.createdAt
                 name = c.name; address = c.address; mobile = c.mobile
-                serialList = c.serialNo.split(",").map { it.trim() }.ifEmpty { listOf("") }
+                serialList = c.serialNo.split(",").map { it.trim() }.filter { it.isNotEmpty() }.ifEmpty { listOf("") }
                 dateOfSale = c.dateOfSale; dateOfInvoice = c.dateOfInvoice
                 billImages = parseList(c.billImages)
                 warrantyImages = parseList(c.warrantyImages)
@@ -190,7 +200,7 @@ fun AddEditScreen(
                 onClick = {
                     val finalSerial = serialList.filter { it.isNotBlank() }.joinToString(", ")
                     if (name.isBlank() || mobile.isBlank() || finalSerial.isBlank()) {
-                        Toast.makeText(context, "Naam, Mobile aur Kam se kam ek Serial No bharna zaroori hai!", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "Naam, Mobile aur Serial No bharna zaroori hai!", Toast.LENGTH_SHORT).show()
                         return@Button
                     }
                     val c = Customer(
@@ -203,7 +213,8 @@ fun AddEditScreen(
                         dateOfInvoice = dateOfInvoice.trim(),
                         billImages = Gson().toJson(billImages),
                         warrantyImages = Gson().toJson(warrantyImages),
-                        synced = false
+                        synced = false,
+                        createdAt = if (customerId > 0) originalCreatedAt else System.currentTimeMillis()
                     )
                     viewModel.save(c) { 
                         Toast.makeText(context, "Saved Successfully", Toast.LENGTH_SHORT).show()
@@ -216,15 +227,14 @@ fun AddEditScreen(
         }
     }
 
-    // Image Viewer with Zoom
     if (fullScreenImage != null) {
         var scale by remember { mutableStateOf(1f) }
         var offset by remember { mutableStateOf(Offset.Zero) }
         Dialog(onDismissRequest = { fullScreenImage = null }) {
             Box(Modifier.fillMaxSize().background(Color.Black)) {
                 AsyncImage(
-                    model = File(fullScreenImage!!),
-                    contentDescription = "Full Screen Image",
+                    model = fullScreenImage!!,
+                    contentDescription = "Full Screen",
                     modifier = Modifier
                         .fillMaxSize()
                         .pointerInput(Unit) {
@@ -234,10 +244,8 @@ fun AddEditScreen(
                             }
                         }
                         .graphicsLayer(
-                            scaleX = scale,
-                            scaleY = scale,
-                            translationX = offset.x,
-                            translationY = offset.y
+                            scaleX = scale, scaleY = scale,
+                            translationX = offset.x, translationY = offset.y
                         ),
                     contentScale = ContentScale.Fit
                 )
@@ -261,6 +269,7 @@ fun ImageListSection(
     onImageClick: (String) -> Unit
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     var showSourceDialog by remember { mutableStateOf(false) }
     var tempCameraUri by remember { mutableStateOf<Uri?>(null) }
 
@@ -270,9 +279,11 @@ fun ImageListSection(
         if (result.resultCode == Activity.RESULT_OK && result.data != null) {
             val outUri = UCrop.getOutput(result.data!!)
             if (outUri != null) {
-                val path = ImageUtils.compressAndSave(context, outUri)
-                if (path.isNotEmpty()) onAdd(path) else {
-                    Toast.makeText(context, "Image process failed", Toast.LENGTH_SHORT).show()
+                scope.launch {
+                    val path = ImageUtils.compressAndSave(context, outUri)
+                    if (path.isNotEmpty()) onAdd(path) else {
+                        Toast.makeText(context, "Image process failed", Toast.LENGTH_SHORT).show()
+                    }
                 }
             }
         }
@@ -303,8 +314,6 @@ fun ImageListSection(
             } catch (e: Exception) {
                 Toast.makeText(context, "Camera error: ${e.message}", Toast.LENGTH_SHORT).show()
             }
-        } else {
-            Toast.makeText(context, "Camera permission required", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -318,7 +327,7 @@ fun ImageListSection(
                 itemsIndexed(images) { i, path ->
                     Box {
                         AsyncImage(
-                            model = File(path),
+                            model = path, // Coil directly content:// handle karega
                             contentDescription = "Image",
                             modifier = Modifier.size(90.dp).clickable { onImageClick(path) }
                         )
