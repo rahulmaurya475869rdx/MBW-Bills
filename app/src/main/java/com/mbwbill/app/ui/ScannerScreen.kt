@@ -29,6 +29,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -72,10 +73,14 @@ fun ScannerScreen(
     val cameraExecutor = remember { Executors.newSingleThreadExecutor() }
     var isScanning by remember { mutableStateOf(true) }
     var imageAnalysisRef by remember { mutableStateOf<ImageAnalysis?>(null) }
-    
+
     var cameraControl by remember { mutableStateOf<CameraControl?>(null) }
     var maxZoom by remember { mutableFloatStateOf(1f) }
     var zoomRatio by remember { mutableFloatStateOf(1f) }
+
+    // Preview dialog state
+    var detectedBarcodes by remember { mutableStateOf<List<Barcode>>(emptyList()) }
+    var showPreview by remember { mutableStateOf(false) }
 
     val barcodeScanner = remember {
         val options = BarcodeScannerOptions.Builder()
@@ -104,8 +109,8 @@ fun ScannerScreen(
     Box(modifier = Modifier.fillMaxSize()) {
         AndroidView(
             factory = { ctx ->
-                val previewView = PreviewView(ctx).apply { 
-                    scaleType = PreviewView.ScaleType.FILL_CENTER 
+                val previewView = PreviewView(ctx).apply {
+                    scaleType = PreviewView.ScaleType.FILL_CENTER
                     implementationMode = PreviewView.ImplementationMode.COMPATIBLE
                 }
                 cameraProviderFuture.addListener({
@@ -120,16 +125,17 @@ fun ScannerScreen(
 
                     imageAnalysis.setAnalyzer(cameraExecutor) { imageProxy ->
                         val mediaImage = imageProxy.image
-                        if (mediaImage != null && isScanning) {
+                        if (mediaImage != null && isScanning && !showPreview) {
                             val image = InputImage.fromMediaImage(mediaImage, imageProxy.imageInfo.rotationDegrees)
                             barcodeScanner.process(image)
                                 .addOnSuccessListener { barcodes ->
-                                    if (barcodes.isNotEmpty()) {
-                                        val rawValue = barcodes.first().rawValue
-                                        if (!rawValue.isNullOrBlank()) {
+                                    if (isScanning && !showPreview) {
+                                        val valid = barcodes.filter { !it.rawValue.isNullOrBlank() }
+                                        if (valid.isNotEmpty()) {
                                             isScanning = false
-                                            imageAnalysis.clearAnalyzer()
-                                            onScanned(rawValue)
+                                            detectedBarcodes = valid
+                                            showPreview = true
+                                            // Analyzer NAHI clear kar rahe — rescan pe resume karenge
                                         }
                                     }
                                 }
@@ -149,14 +155,13 @@ fun ScannerScreen(
                         )
                         cameraControl = camera.cameraControl
                         maxZoom = camera.cameraInfo.zoomState.value?.maxZoomRatio ?: 1f
-                        
-                        // Automatic Focus Setup
+
+                        // Auto Focus trigger
                         val action = FocusMeteringAction.Builder(
                             previewView.meteringPointFactory.createPoint(previewView.width / 2f, previewView.height / 2f),
                             FocusMeteringAction.FLAG_AF or FocusMeteringAction.FLAG_AE
                         ).setAutoCancelDuration(3, TimeUnit.SECONDS).build()
                         cameraControl?.startFocusAndMetering(action)
-                        
                     } catch (exc: Exception) {}
                 }, ContextCompat.getMainExecutor(context))
                 previewView
@@ -164,18 +169,16 @@ fun ScannerScreen(
             modifier = Modifier.fillMaxSize()
         )
 
-        // Focus circle hatadiya, box ko behtar banaya
         Canvas(modifier = Modifier.fillMaxSize()) {
             val boxWidth = size.width * 0.85f
-            val boxHeight = size.width * 0.55f 
+            val boxHeight = size.width * 0.55f
             val left = (size.width - boxWidth) / 2
             val top = (size.height - boxHeight) / 2
-            
+
             val darkColor = Color.Black.copy(alpha = 0.6f)
 
             drawRect(darkColor, size = Size(size.width, top))
             drawRect(darkColor, topLeft = Offset(0f, top + boxHeight), size = Size(size.width, size.height - top - boxHeight))
-            
             drawRect(darkColor, topLeft = Offset(0f, top), size = Size(left, boxHeight))
             drawRect(darkColor, topLeft = Offset(left + boxWidth, top), size = Size(size.width - left - boxWidth, boxHeight))
 
@@ -194,14 +197,14 @@ fun ScannerScreen(
         ) {
             Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White)
         }
-        
+
         Text(
             text = "Scan Barcode / QR Code",
             color = Color.White,
             modifier = Modifier.align(Alignment.TopCenter).padding(top = 80.dp),
             style = MaterialTheme.typography.titleMedium
         )
-        
+
         Column(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
@@ -213,7 +216,7 @@ fun ScannerScreen(
             Text("Zoom: ${String.format("%.1f", zoomRatio)}x", color = Color.White, fontSize = 12.sp)
             Slider(
                 value = zoomRatio,
-                onValueChange = { 
+                onValueChange = {
                     zoomRatio = it
                     cameraControl?.setZoomRatio(it)
                 },
@@ -226,6 +229,67 @@ fun ScannerScreen(
         }
     }
 
+    // ===== Preview Dialog =====
+    if (showPreview) {
+        AlertDialog(
+            onDismissRequest = {
+                showPreview = false
+                detectedBarcodes = emptyList()
+                isScanning = true
+            },
+            title = {
+                Text(
+                    if (detectedBarcodes.size > 1) "Multiple Barcodes — Sahi wala chuno"
+                    else "Barcode Detected — Confirm karein"
+                )
+            },
+            text = {
+                Column {
+                    detectedBarcodes.forEach { barcode ->
+                        val value = barcode.rawValue?.trim() ?: ""
+                        Surface(
+                            onClick = {
+                                showPreview = false
+                                imageAnalysisRef?.clearAnalyzer()
+                                onScanned(value)
+                            },
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                            shape = MaterialTheme.shapes.medium,
+                            tonalElevation = 2.dp
+                        ) {
+                            Column(Modifier.padding(12.dp)) {
+                                Text(
+                                    barcode.formatName(),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Spacer(Modifier.height(2.dp))
+                                Text(
+                                    value,
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showPreview = false
+                    detectedBarcodes = emptyList()
+                    isScanning = true
+                }) { Text("Rescan") }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showPreview = false
+                    onBack()
+                }) { Text("Cancel") }
+            }
+        )
+    }
+
     DisposableEffect(Unit) {
         onDispose {
             imageAnalysisRef?.clearAnalyzer()
@@ -233,4 +297,13 @@ fun ScannerScreen(
             barcodeScanner.close()
         }
     }
+}
+
+private fun Barcode.formatName(): String = when (format) {
+    Barcode.FORMAT_CODE_128 -> "CODE_128"
+    Barcode.FORMAT_CODE_39 -> "CODE_39"
+    Barcode.FORMAT_EAN_13 -> "EAN_13"
+    Barcode.FORMAT_QR_CODE -> "QR_CODE"
+    Barcode.FORMAT_DATA_MATRIX -> "DATA_MATRIX"
+    else -> "OTHER (${format})"
 }
