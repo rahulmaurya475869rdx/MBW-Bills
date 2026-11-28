@@ -2,9 +2,12 @@ package com.mbwbill.app.ui
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.view.MotionEvent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.camera.core.CameraControl
 import androidx.camera.core.CameraSelector
+import androidx.camera.core.FocusMeteringAction
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
@@ -14,6 +17,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
@@ -27,6 +31,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import com.google.mlkit.vision.barcode.BarcodeScannerOptions
@@ -67,8 +72,13 @@ fun ScannerScreen(
     val cameraExecutor = remember { Executors.newSingleThreadExecutor() }
     var isScanning by remember { mutableStateOf(true) }
     var imageAnalysisRef by remember { mutableStateOf<ImageAnalysis?>(null) }
+    
+    // Zoom & Focus states
+    var cameraControl by remember { mutableStateOf<CameraControl?>(null) }
+    var maxZoom by remember { mutableFloatStateOf(1f) }
+    var zoomRatio by remember { mutableFloatStateOf(1f) }
+    var focusPoint by remember { mutableStateOf<Offset?>(null) }
 
-    // 👇 Format restrict kiya taaki galat scan na ho
     val barcodeScanner = remember {
         val options = BarcodeScannerOptions.Builder()
             .setBarcodeFormats(
@@ -87,7 +97,7 @@ fun ScannerScreen(
         initialValue = 0f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
-            animation = tween(1500, easing = LinearEasing), // Thoda fast animation
+            animation = tween(1500, easing = LinearEasing),
             repeatMode = RepeatMode.Reverse
         ),
         label = "scanLineY"
@@ -117,7 +127,7 @@ fun ScannerScreen(
                                         val rawValue = barcodes.first().rawValue
                                         if (!rawValue.isNullOrBlank()) {
                                             isScanning = false
-                                            imageAnalysis.clearAnalyzer() // 👈 Analyzer clear kiya taaki baar baar scan na kare
+                                            imageAnalysis.clearAnalyzer()
                                             onScanned(rawValue)
                                         }
                                     }
@@ -130,12 +140,25 @@ fun ScannerScreen(
 
                     try {
                         cameraProvider.unbindAll()
-                        cameraProvider.bindToLifecycle(
+                        val camera = cameraProvider.bindToLifecycle(
                             lifecycleOwner,
                             CameraSelector.DEFAULT_BACK_CAMERA,
                             preview,
                             imageAnalysis
                         )
+                        cameraControl = camera.cameraControl
+                        maxZoom = camera.cameraInfo.zoomState.value?.maxZoomRatio ?: 1f
+                        
+                        // Tap to focus implementation
+                        previewView.setOnTouchListener { _, event ->
+                            if (event.action == MotionEvent.ACTION_UP) {
+                                val point = previewView.meteringPointFactory.createPoint(event.x, event.y)
+                                val action = FocusMeteringAction.Builder(point).build()
+                                cameraControl?.startFocusAndMetering(action)
+                                focusPoint = Offset(event.x, event.y)
+                            }
+                            true
+                        }
                     } catch (exc: Exception) {}
                 }, ContextCompat.getMainExecutor(context))
                 previewView
@@ -149,7 +172,6 @@ fun ScannerScreen(
             val left = (size.width - boxSize) / 2
             val top = (size.height - boxSize) / 2
             
-            // 👇 Background ekdum dark (0.95f) kar diya
             val darkColor = Color.Black.copy(alpha = 0.95f)
 
             drawRect(darkColor, size = Size(size.width, top))
@@ -157,12 +179,15 @@ fun ScannerScreen(
             drawRect(darkColor, topLeft = Offset(0f, top), size = Size(left, boxSize))
             drawRect(darkColor, topLeft = Offset(left + boxSize, top), size = Size(size.width - left - boxSize, boxSize))
 
-            // Green Border
             drawRect(Color.Green, topLeft = Offset(left, top), size = Size(boxSize, boxSize), style = Stroke(width = 5.dp.toPx()))
 
-            // Moving Green Line
             val lineY = top + (boxSize * scanLineY)
             drawLine(Color.Green, start = Offset(left, lineY), end = Offset(left + boxSize, lineY), strokeWidth = 4.dp.toPx())
+            
+            // Focus Circle
+            focusPoint?.let { point ->
+                drawCircle(color = Color.Yellow, radius = 30.dp.toPx(), center = point, style = Stroke(width = 2.dp.toPx()))
+            }
         }
 
         IconButton(
@@ -181,6 +206,30 @@ fun ScannerScreen(
             modifier = Modifier.align(Alignment.TopCenter).padding(top = 80.dp),
             style = MaterialTheme.typography.titleMedium
         )
+        
+        // Zoom Slider
+        Column(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 40.dp, start = 24.dp, end = 24.dp)
+                .background(Color.Black.copy(alpha = 0.6f), shape = RoundedCornerShape(16.dp))
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text("Zoom: ${String.format("%.1f", zoomRatio)}x", color = Color.White, fontSize = 12.sp)
+            Slider(
+                value = zoomRatio,
+                onValueChange = { 
+                    zoomRatio = it
+                    cameraControl?.setZoomRatio(it)
+                },
+                valueRange = 1f..maxZoom,
+                colors = SliderDefaults.colors(
+                    thumbColor = Color.Green,
+                    activeTrackColor = Color.Green
+                )
+            )
+        }
     }
 
     DisposableEffect(Unit) {
