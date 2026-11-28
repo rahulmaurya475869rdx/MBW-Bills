@@ -9,22 +9,29 @@ import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import coil.compose.AsyncImage
@@ -41,24 +48,37 @@ fun AddEditScreen(
     customerId: Long,
     viewModel: MainViewModel,
     onBack: () -> Unit,
-    onScanSerial: () -> Unit, // 👈 Naya parameter
-    scannedSerial: String,    // 👈 Naya parameter
-    onScannedConsumed: () -> Unit // 👈 Naya parameter
+    onScanSerial: () -> Unit,
+    scannedSerial: String,
+    onScannedConsumed: () -> Unit
 ) {
     val context = LocalContext.current
     var name by remember { mutableStateOf("") }
     var address by remember { mutableStateOf("") }
     var mobile by remember { mutableStateOf("") }
-    var serialNo by remember { mutableStateOf("") }
+    
+    // 👇 Multiple Serial Numbers ki list
+    var serialList by remember { mutableStateOf(listOf("")) }
+    var scanIndex by remember { mutableStateOf(0) }
+    
     var dateOfSale by remember { mutableStateOf("") }
     var dateOfInvoice by remember { mutableStateOf("") }
     var billImages by remember { mutableStateOf<List<String>>(emptyList()) }
     var warrantyImages by remember { mutableStateOf<List<String>>(emptyList()) }
 
-    // Scanner se aaya hua data yahan receive hoga
+    // Full Screen Image Dialog ke liye
+    var fullScreenImage by remember { mutableStateOf<String?>(null) }
+
+    // Scanner se aaya hua data yahan fill hoga (specific index par)
     LaunchedEffect(scannedSerial) {
         if (scannedSerial.isNotBlank()) {
-            serialNo = scannedSerial
+            val newList = serialList.toMutableList()
+            if (scanIndex in newList.indices) {
+                newList[scanIndex] = scannedSerial
+            } else {
+                newList.add(scannedSerial)
+            }
+            serialList = newList
             onScannedConsumed()
         }
     }
@@ -67,7 +87,9 @@ fun AddEditScreen(
         if (customerId > 0) {
             viewModel.getById(customerId)?.let { c ->
                 name = c.name; address = c.address; mobile = c.mobile
-                serialNo = c.serialNo; dateOfSale = c.dateOfSale; dateOfInvoice = c.dateOfInvoice
+                // Purane comma-separated serials ko list mein split karo
+                serialList = c.serialNo.split(",").map { it.trim() }.ifEmpty { listOf("") }
+                dateOfSale = c.dateOfSale; dateOfInvoice = c.dateOfInvoice
                 billImages = parseList(c.billImages)
                 warrantyImages = parseList(c.warrantyImages)
             }
@@ -99,20 +121,41 @@ fun AddEditScreen(
             Spacer(Modifier.height(8.dp))
             OutlinedTextField(value = mobile, onValueChange = { mobile = it },
                 label = { Text("Mobile Number *") }, modifier = Modifier.fillMaxWidth())
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(12.dp))
 
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                OutlinedTextField(
-                    value = serialNo,
-                    onValueChange = { serialNo = it },
-                    label = { Text("Serial No *") },
-                    modifier = Modifier.weight(1f)
-                )
-                // 👇 Apna custom scanner launch karne ke liye
-                IconButton(onClick = onScanSerial) { 
-                    Icon(Icons.Default.QrCodeScanner, contentDescription = "Scan") 
+            // 👇 Multiple Serial Number Fields
+            Text("Serial No (Max 5)", fontSize = 14.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+            Spacer(Modifier.height(4.dp))
+            serialList.forEachIndexed { index, serial ->
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 4.dp)) {
+                    OutlinedTextField(
+                        value = serial,
+                        onValueChange = { newVal ->
+                            serialList = serialList.toMutableList().also { it[index] = newVal }
+                        },
+                        label = { Text(if (index == 0) "Serial No 1 *" else "Serial No ${index + 1}") },
+                        modifier = Modifier.weight(1f)
+                    )
+                    IconButton(onClick = {
+                        scanIndex = index
+                        onScanSerial()
+                    }) { Icon(Icons.Default.QrCodeScanner, contentDescription = "Scan") }
+                    
+                    if (serialList.size > 1) {
+                        IconButton(onClick = {
+                            serialList = serialList.toMutableList().also { it.removeAt(index) }
+                        }) { Icon(Icons.Default.Delete, tint = MaterialTheme.colorScheme.error) }
+                    }
                 }
             }
+            if (serialList.size < 5) {
+                TextButton(onClick = { serialList = serialList + "" }) {
+                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("Add Another Serial No")
+                }
+            }
+
             Spacer(Modifier.height(8.dp))
             OutlinedTextField(value = dateOfSale, onValueChange = { dateOfSale = it },
                 label = { Text("Date of Sale (YYYY-MM-DD) *") }, modifier = Modifier.fillMaxWidth())
@@ -125,7 +168,8 @@ fun AddEditScreen(
                 label = "Bill Image (1 ya zyada)",
                 images = billImages,
                 onAdd = { billImages = billImages + it },
-                onRemove = { i -> billImages = billImages.toMutableList().also { it.removeAt(i) } }
+                onRemove = { i -> billImages = billImages.toMutableList().also { it.removeAt(i) } },
+                onImageClick = { fullScreenImage = it }
             )
             Spacer(Modifier.height(12.dp))
 
@@ -133,14 +177,16 @@ fun AddEditScreen(
                 label = "Warranty Card Images",
                 images = warrantyImages,
                 onAdd = { warrantyImages = warrantyImages + it },
-                onRemove = { i -> warrantyImages = warrantyImages.toMutableList().also { it.removeAt(i) } }
+                onRemove = { i -> warrantyImages = warrantyImages.toMutableList().also { it.removeAt(i) } },
+                onImageClick = { fullScreenImage = it }
             )
             Spacer(Modifier.height(20.dp))
 
             Button(
                 onClick = {
-                    if (name.isBlank() || mobile.isBlank() || serialNo.isBlank()) {
-                        Toast.makeText(context, "Naam, Mobile aur Serial No bharna zaroori hai!", Toast.LENGTH_SHORT).show()
+                    val finalSerial = serialList.filter { it.isNotBlank() }.joinToString(", ")
+                    if (name.isBlank() || mobile.isBlank() || finalSerial.isBlank()) {
+                        Toast.makeText(context, "Naam, Mobile aur Kam se kam ek Serial No bharna zaroori hai!", Toast.LENGTH_SHORT).show()
                         return@Button
                     }
                     val c = Customer(
@@ -148,7 +194,7 @@ fun AddEditScreen(
                         name = name.trim(),
                         address = address.trim(),
                         mobile = mobile.trim(),
-                        serialNo = serialNo.trim(),
+                        serialNo = finalSerial,
                         dateOfSale = dateOfSale.trim(),
                         dateOfInvoice = dateOfInvoice.trim(),
                         billImages = Gson().toJson(billImages),
@@ -165,6 +211,26 @@ fun AddEditScreen(
             Spacer(Modifier.height(24.dp))
         }
     }
+
+    // 👇 Full Screen Image Dialog
+    if (fullScreenImage != null) {
+        Dialog(onDismissRequest = { fullScreenImage = null }) {
+            Box(Modifier.fillMaxSize().background(Color.Black).clickable { fullScreenImage = null }) {
+                AsyncImage(
+                    model = File(fullScreenImage!!),
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxWidth().align(Alignment.Center),
+                    contentScale = ContentScale.Fit
+                )
+                IconButton(
+                    onClick = { fullScreenImage = null },
+                    modifier = Modifier.align(Alignment.TopEnd).padding(16.dp)
+                ) {
+                    Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White)
+                }
+            }
+        }
+    }
 }
 
 @Composable
@@ -172,7 +238,8 @@ fun ImageListSection(
     label: String,
     images: List<String>,
     onAdd: (String) -> Unit,
-    onRemove: (Int) -> Unit
+    onRemove: (Int) -> Unit,
+    onImageClick: (String) -> Unit
 ) {
     val context = LocalContext.current
     var showSourceDialog by remember { mutableStateOf(false) }
@@ -234,7 +301,7 @@ fun ImageListSection(
                         AsyncImage(
                             model = File(path),
                             contentDescription = null,
-                            modifier = Modifier.size(90.dp)
+                            modifier = Modifier.size(90.dp).clickable { onImageClick(path) }
                         )
                         IconButton(
                             onClick = { onRemove(i) },
