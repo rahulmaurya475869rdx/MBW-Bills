@@ -29,7 +29,6 @@ import coil.compose.AsyncImage
 import com.google.gson.Gson
 import com.mbwbill.app.data.Customer
 import com.mbwbill.app.viewmodel.MainViewModel
-import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -107,14 +106,13 @@ fun DetailScreen(
         }
     }
 
-    // Image Viewer with Zoom
     if (fullScreenImage != null) {
         var scale by remember { mutableStateOf(1f) }
         var offset by remember { mutableStateOf(Offset.Zero) }
         Dialog(onDismissRequest = { fullScreenImage = null }) {
             Box(Modifier.fillMaxSize().background(Color.Black)) {
                 AsyncImage(
-                    model = File(fullScreenImage!!),
+                    model = fullScreenImage!!,
                     contentDescription = "Full Screen Image",
                     modifier = Modifier
                         .fillMaxSize()
@@ -125,10 +123,8 @@ fun DetailScreen(
                             }
                         }
                         .graphicsLayer(
-                            scaleX = scale,
-                            scaleY = scale,
-                            translationX = offset.x,
-                            translationY = offset.y
+                            scaleX = scale, scaleY = scale,
+                            translationX = offset.x, translationY = offset.y
                         ),
                     contentScale = ContentScale.Fit
                 )
@@ -163,7 +159,7 @@ private fun ImageSection(title: String, json: String, onImageClick: (String) -> 
     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         items(paths) { p ->
             AsyncImage(
-                model = File(p),
+                model = p,
                 contentDescription = null,
                 modifier = Modifier.size(110.dp).clickable { onImageClick(p) } 
             )
