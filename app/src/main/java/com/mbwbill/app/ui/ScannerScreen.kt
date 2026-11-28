@@ -2,7 +2,6 @@ package com.mbwbill.app.ui
 
 import android.Manifest
 import android.content.pm.PackageManager
-import android.view.MotionEvent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.CameraControl
@@ -39,6 +38,7 @@ import com.google.mlkit.vision.barcode.BarcodeScanning
 import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.common.InputImage
 import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 @Composable
 fun ScannerScreen(
@@ -73,11 +73,9 @@ fun ScannerScreen(
     var isScanning by remember { mutableStateOf(true) }
     var imageAnalysisRef by remember { mutableStateOf<ImageAnalysis?>(null) }
     
-    // Zoom & Focus states
     var cameraControl by remember { mutableStateOf<CameraControl?>(null) }
     var maxZoom by remember { mutableFloatStateOf(1f) }
     var zoomRatio by remember { mutableFloatStateOf(1f) }
-    var focusPoint by remember { mutableStateOf<Offset?>(null) }
 
     val barcodeScanner = remember {
         val options = BarcodeScannerOptions.Builder()
@@ -106,7 +104,10 @@ fun ScannerScreen(
     Box(modifier = Modifier.fillMaxSize()) {
         AndroidView(
             factory = { ctx ->
-                val previewView = PreviewView(ctx).apply { scaleType = PreviewView.ScaleType.FILL_CENTER }
+                val previewView = PreviewView(ctx).apply { 
+                    scaleType = PreviewView.ScaleType.FILL_CENTER 
+                    implementationMode = PreviewView.ImplementationMode.COMPATIBLE
+                }
                 cameraProviderFuture.addListener({
                     val cameraProvider = cameraProviderFuture.get()
                     val preview = Preview.Builder().build().also {
@@ -149,16 +150,13 @@ fun ScannerScreen(
                         cameraControl = camera.cameraControl
                         maxZoom = camera.cameraInfo.zoomState.value?.maxZoomRatio ?: 1f
                         
-                        // Tap to focus implementation
-                        previewView.setOnTouchListener { _, event ->
-                            if (event.action == MotionEvent.ACTION_UP) {
-                                val point = previewView.meteringPointFactory.createPoint(event.x, event.y)
-                                val action = FocusMeteringAction.Builder(point).build()
-                                cameraControl?.startFocusAndMetering(action)
-                                focusPoint = Offset(event.x, event.y)
-                            }
-                            true
-                        }
+                        // Automatic Focus Setup
+                        val action = FocusMeteringAction.Builder(
+                            previewView.meteringPointFactory.createPoint(previewView.width / 2f, previewView.height / 2f),
+                            FocusMeteringAction.FLAG_AF or FocusMeteringAction.FLAG_AE
+                        ).setAutoCancelDuration(3, TimeUnit.SECONDS).build()
+                        cameraControl?.startFocusAndMetering(action)
+                        
                     } catch (exc: Exception) {}
                 }, ContextCompat.getMainExecutor(context))
                 previewView
@@ -166,28 +164,25 @@ fun ScannerScreen(
             modifier = Modifier.fillMaxSize()
         )
 
-        // Dark Overlay & Scan Box
+        // Focus circle hatadiya, box ko behtar banaya
         Canvas(modifier = Modifier.fillMaxSize()) {
-            val boxSize = size.width * 0.75f
-            val left = (size.width - boxSize) / 2
-            val top = (size.height - boxSize) / 2
+            val boxWidth = size.width * 0.85f
+            val boxHeight = size.width * 0.55f 
+            val left = (size.width - boxWidth) / 2
+            val top = (size.height - boxHeight) / 2
             
-            val darkColor = Color.Black.copy(alpha = 0.95f)
+            val darkColor = Color.Black.copy(alpha = 0.6f)
 
             drawRect(darkColor, size = Size(size.width, top))
-            drawRect(darkColor, topLeft = Offset(0f, top + boxSize), size = Size(size.width, size.height - top - boxSize))
-            drawRect(darkColor, topLeft = Offset(0f, top), size = Size(left, boxSize))
-            drawRect(darkColor, topLeft = Offset(left + boxSize, top), size = Size(size.width - left - boxSize, boxSize))
-
-            drawRect(Color.Green, topLeft = Offset(left, top), size = Size(boxSize, boxSize), style = Stroke(width = 5.dp.toPx()))
-
-            val lineY = top + (boxSize * scanLineY)
-            drawLine(Color.Green, start = Offset(left, lineY), end = Offset(left + boxSize, lineY), strokeWidth = 4.dp.toPx())
+            drawRect(darkColor, topLeft = Offset(0f, top + boxHeight), size = Size(size.width, size.height - top - boxHeight))
             
-            // Focus Circle
-            focusPoint?.let { point ->
-                drawCircle(color = Color.Yellow, radius = 30.dp.toPx(), center = point, style = Stroke(width = 2.dp.toPx()))
-            }
+            drawRect(darkColor, topLeft = Offset(0f, top), size = Size(left, boxHeight))
+            drawRect(darkColor, topLeft = Offset(left + boxWidth, top), size = Size(size.width - left - boxWidth, boxHeight))
+
+            drawRect(Color.Green, topLeft = Offset(left, top), size = Size(boxWidth, boxHeight), style = Stroke(width = 4.dp.toPx()))
+
+            val lineY = top + (boxHeight * scanLineY)
+            drawLine(Color.Green, start = Offset(left, lineY), end = Offset(left + boxWidth, lineY), strokeWidth = 3.dp.toPx())
         }
 
         IconButton(
@@ -207,7 +202,6 @@ fun ScannerScreen(
             style = MaterialTheme.typography.titleMedium
         )
         
-        // Zoom Slider
         Column(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
