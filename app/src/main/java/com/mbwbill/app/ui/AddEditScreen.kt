@@ -29,6 +29,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -57,7 +58,7 @@ fun AddEditScreen(
     var address by remember { mutableStateOf("") }
     var mobile by remember { mutableStateOf("") }
     
-    // 👇 Multiple Serial Numbers ki list
+    // Multiple Serial Numbers ki list
     var serialList by remember { mutableStateOf(listOf("")) }
     var scanIndex by remember { mutableStateOf(0) }
     
@@ -123,8 +124,8 @@ fun AddEditScreen(
                 label = { Text("Mobile Number *") }, modifier = Modifier.fillMaxWidth())
             Spacer(Modifier.height(12.dp))
 
-            // 👇 Multiple Serial Number Fields
-            Text("Serial No (Max 5)", fontSize = 14.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+            // Multiple Serial Number Fields
+            Text("Serial No (Max 5)", fontSize = 14.sp, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(4.dp))
             serialList.forEachIndexed { index, serial ->
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 4.dp)) {
@@ -212,7 +213,7 @@ fun AddEditScreen(
         }
     }
 
-    // 👇 Full Screen Image Dialog
+    // Full Screen Image Dialog
     if (fullScreenImage != null) {
         Dialog(onDismissRequest = { fullScreenImage = null }) {
             Box(Modifier.fillMaxSize().background(Color.Black).clickable { fullScreenImage = null }) {
