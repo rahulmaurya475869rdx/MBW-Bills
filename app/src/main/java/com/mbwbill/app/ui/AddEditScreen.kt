@@ -24,8 +24,8 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.listSaver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -55,8 +55,9 @@ fun AddEditScreen(
     customerId: Long,
     viewModel: MainViewModel,
     onBack: () -> Unit,
-    onScanSerial: () -> Unit,
-    scannedSerial: String,
+    onScanSerial: (Int) -> Unit,
+    scannedIndex: Int,
+    scannedValue: String,
     onScannedConsumed: () -> Unit
 ) {
     val context = LocalContext.current
@@ -64,17 +65,17 @@ fun AddEditScreen(
     var name by remember { mutableStateOf("") }
     var address by remember { mutableStateOf("") }
     var mobile by remember { mutableStateOf("") }
-    
+
     var originalCreatedAt by remember { mutableLongStateOf(0L) }
 
-    // rememberSaveable use kiya taaki scan ke baad state na ude
-    val listSaver = listSaver<List<String>, String>(
+    val listSaverInstance = listSaver<List<String>, String>(
         save = { it },
         restore = { it }
     )
-    var serialList by rememberSaveable(stateSaver = listSaver) { mutableStateOf(listOf("")) }
-    var scanIndex by rememberSaveable { mutableIntStateOf(0) }
-    
+    var serialList by rememberSaveable(stateSaver = listSaverInstance) {
+        mutableStateOf(listOf(""))
+    }
+
     var dateOfSale by remember { mutableStateOf("") }
     var dateOfInvoice by remember { mutableStateOf("") }
     var billImages by remember { mutableStateOf<List<String>>(emptyList()) }
@@ -82,13 +83,14 @@ fun AddEditScreen(
 
     var fullScreenImage by remember { mutableStateOf<String?>(null) }
 
-    LaunchedEffect(scannedSerial) {
-        if (scannedSerial.isNotBlank()) {
+    // Scan result handler — index + value dono received from savedStateHandle
+    LaunchedEffect(scannedIndex, scannedValue) {
+        if (scannedValue.isNotBlank() && scannedIndex >= 0) {
             val newList = serialList.toMutableList()
-            while (newList.size <= scanIndex) {
+            while (newList.size <= scannedIndex) {
                 newList.add("")
             }
-            newList[scanIndex] = scannedSerial
+            newList[scannedIndex] = scannedValue
             serialList = newList
             onScannedConsumed()
         }
@@ -112,8 +114,8 @@ fun AddEditScreen(
             TopAppBar(
                 title = { Text(if (customerId == 0L) "Naya Customer" else "Edit Customer") },
                 navigationIcon = {
-                    IconButton(onClick = onBack) { 
-                        Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "Back") 
+                    IconButton(onClick = onBack) {
+                        Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "Back")
                     }
                 }
             )
@@ -149,17 +151,17 @@ fun AddEditScreen(
                         modifier = Modifier.weight(1f)
                     )
                     IconButton(onClick = {
-                        scanIndex = index
-                        onScanSerial()
-                    }) { 
-                        Icon(imageVector = Icons.Default.QrCodeScanner, contentDescription = "Scan") 
+                        // Pass index directly to parent — MainActivity savedStateHandle me store karega
+                        onScanSerial(index)
+                    }) {
+                        Icon(imageVector = Icons.Default.QrCodeScanner, contentDescription = "Scan")
                     }
-                    
+
                     if (serialList.size > 1) {
                         IconButton(onClick = {
                             serialList = serialList.toMutableList().also { it.removeAt(index) }
-                        }) { 
-                            Icon(imageVector = Icons.Default.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.error) 
+                        }) {
+                            Icon(imageVector = Icons.Default.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.error)
                         }
                     }
                 }
@@ -216,9 +218,9 @@ fun AddEditScreen(
                         synced = false,
                         createdAt = if (customerId > 0) originalCreatedAt else System.currentTimeMillis()
                     )
-                    viewModel.save(c) { 
+                    viewModel.save(c) {
                         Toast.makeText(context, "Saved Successfully", Toast.LENGTH_SHORT).show()
-                        onBack() 
+                        onBack()
                     }
                 },
                 modifier = Modifier.fillMaxWidth().height(52.dp)
@@ -327,15 +329,15 @@ fun ImageListSection(
                 itemsIndexed(images) { i, path ->
                     Box {
                         AsyncImage(
-                            model = path, // Coil directly content:// handle karega
+                            model = path,
                             contentDescription = "Image",
                             modifier = Modifier.size(90.dp).clickable { onImageClick(path) }
                         )
                         IconButton(
                             onClick = { onRemove(i) },
                             modifier = Modifier.size(24.dp).align(Alignment.TopEnd)
-                        ) { 
-                            Icon(imageVector = Icons.Default.Close, contentDescription = "Remove", tint = MaterialTheme.colorScheme.error) 
+                        ) {
+                            Icon(imageVector = Icons.Default.Close, contentDescription = "Remove", tint = MaterialTheme.colorScheme.error)
                         }
                     }
                 }
@@ -384,7 +386,7 @@ private fun startCrop(context: Context, sourceUri: Uri, cropLauncher: androidx.a
                 setCompressionQuality(85)
             })
             .getIntent(context)
-            
+
         intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
         cropLauncher.launch(intent)
     } catch (e: Exception) {
