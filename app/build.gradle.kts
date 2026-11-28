@@ -39,6 +39,9 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.4")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.4")
     implementation("androidx.activity:activity-compose:1.9.1")
+    
+    // AppCompat for UCrop Theme
+    implementation("androidx.appcompat:appcompat:1.7.0")
 
     val composeBom = platform("androidx.compose:compose-bom:2024.08.00")
     implementation(composeBom)
@@ -58,8 +61,14 @@ dependencies {
 
     implementation("androidx.work:work-runtime-ktx:2.9.1")
     implementation("io.coil-kt:coil-compose:2.6.0")
-    implementation("com.google.android.gms:play-services-code-scanner:16.1.0")
     implementation("com.github.yalantis:ucrop:2.2.10")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("com.google.code.gson:gson:2.10.1")
+
+    // CameraX & ML Kit (Custom Scanner ke liye)
+    implementation("androidx.camera:camera-core:1.3.4")
+    implementation("androidx.camera:camera-camera2:1.3.4")
+    implementation("androidx.camera:camera-lifecycle:1.3.4")
+    implementation("androidx.camera:camera-view:1.3.4")
+    implementation("com.google.mlkit:barcode-scanning:17.2.0")
 }
