@@ -37,15 +37,13 @@ fun AppRoot() {
             val vm: MainViewModel = viewModel()
 
             NavHost(navController = nav, startDestination = "home") {
-                composable("home") {
-                    val scannedResult = nav.currentBackStackEntry?.savedStateHandle?.getStateFlow("scanned_result", "")?.collectAsState()
+                composable("home") { entry ->
+                    val scannedResult = entry.savedStateHandle.getStateFlow("scanned_result", "").collectAsState()
                     
-                    LaunchedEffect(scannedResult?.value) {
-                        // 👇 Yahan safe call (?.value) lagaya gaya hai
-                        val result = scannedResult?.value
-                        if (!result.isNullOrBlank()) {
-                            vm.setQuery(result)
-                            nav.currentBackStackEntry?.savedStateHandle?.remove<String>("scanned_result")
+                    LaunchedEffect(scannedResult.value) {
+                        if (scannedResult.value.isNotBlank()) {
+                            vm.setQuery(scannedResult.value)
+                            entry.savedStateHandle.remove<String>("scanned_result")
                         }
                     }
                     
@@ -62,16 +60,15 @@ fun AppRoot() {
                     arguments = listOf(navArgument("id") { type = NavType.LongType })
                 ) { entry ->
                     val id = entry.arguments?.getLong("id") ?: 0L
-                    val scannedResult = nav.currentBackStackEntry?.savedStateHandle?.getStateFlow("scanned_result", "")?.collectAsState()
+                    val scannedResult = entry.savedStateHandle.getStateFlow("scanned_result", "").collectAsState()
                     
                     AddEditScreen(
                         customerId = id,
                         viewModel = vm,
                         onBack = { nav.popBackStack() },
                         onScanSerial = { nav.navigate("scanner") },
-                        // 👇 Yahan safe call lagaya gaya hai
-                        scannedSerial = scannedResult?.value ?: "",
-                        onScannedConsumed = { nav.currentBackStackEntry?.savedStateHandle?.remove<String>("scanned_result") }
+                        scannedSerial = scannedResult.value,
+                        onScannedConsumed = { entry.savedStateHandle.remove<String>("scanned_result") }
                     )
                 }
                 
