@@ -41,7 +41,7 @@ fun HomeScreen(
     val customers by viewModel.customers.collectAsStateWithLifecycle()
     var syncing by remember { mutableStateOf(false) }
 
-    // Folder Picker
+    // Folder Picker & Restore
     val folderPickerLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocumentTree()
     ) { uri ->
@@ -50,7 +50,13 @@ fun HomeScreen(
                 uri, Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
             )
             StorageManager.saveFolderUri(context, uri)
-            Toast.makeText(context, "Storage Folder Set!", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "Folder Set! Data Restoring...", Toast.LENGTH_SHORT).show()
+            
+            // Folder select hote hi purana data import karo, phir current data backup karo
+            viewModel.importDataFromFolder {
+                viewModel.backupData()
+                Toast.makeText(context, "Data Restored Successfully!", Toast.LENGTH_SHORT).show()
+            }
         }
     }
 
@@ -75,7 +81,11 @@ fun HomeScreen(
                             WorkManager.getInstance(context)
                                 .getWorkInfoByIdLiveData(req.id)
                                 .observeForever { info ->
-                                    if (info != null && info.state.isFinished) syncing = false
+                                    if (info != null && info.state.isFinished) {
+                                        syncing = false
+                                        // Sync ke baad backup update karo taaki synced status save ho jaye
+                                        viewModel.backupData() 
+                                    }
                                 }
                         }
                     ) {
