@@ -151,7 +151,12 @@ fun AddEditScreen(
             }
             if (serialList.size < 5) {
                 TextButton(onClick = { serialList = serialList + "" }) {
-                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                    // 👇 Yahan explicit imageVector use kiya hai
+                    Icon(
+                        imageVector = Icons.Filled.Add,
+                        contentDescription = "Add Serial",
+                        modifier = Modifier.size(18.dp)
+                    )
                     Spacer(Modifier.width(4.dp))
                     Text("Add Another Serial No")
                 }
