@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -135,7 +136,6 @@ fun ScannerScreen(
                                             isScanning = false
                                             detectedBarcodes = valid
                                             showPreview = true
-                                            // Analyzer NAHI clear kar rahe — rescan pe resume karenge
                                         }
                                     }
                                 }
@@ -156,7 +156,6 @@ fun ScannerScreen(
                         cameraControl = camera.cameraControl
                         maxZoom = camera.cameraInfo.zoomState.value?.maxZoomRatio ?: 1f
 
-                        // Auto Focus trigger
                         val action = FocusMeteringAction.Builder(
                             previewView.meteringPointFactory.createPoint(previewView.width / 2f, previewView.height / 2f),
                             FocusMeteringAction.FLAG_AF or FocusMeteringAction.FLAG_AE
@@ -229,7 +228,7 @@ fun ScannerScreen(
         }
     }
 
-    // ===== Preview Dialog =====
+    // ===== UPDATED PREVIEW DIALOG =====
     if (showPreview) {
         AlertDialog(
             onDismissRequest = {
@@ -239,35 +238,45 @@ fun ScannerScreen(
             },
             title = {
                 Text(
-                    if (detectedBarcodes.size > 1) "Multiple Barcodes — Sahi wala chuno"
-                    else "Barcode Detected — Confirm karein"
+                    if (detectedBarcodes.size > 1) "Sahi Barcode Chuno"
+                    else "Barcode Mila"
                 )
             },
             text = {
                 Column {
                     detectedBarcodes.forEach { barcode ->
                         val value = barcode.rawValue?.trim() ?: ""
-                        Surface(
+                        Card(
                             onClick = {
                                 showPreview = false
                                 imageAnalysisRef?.clearAnalyzer()
                                 onScanned(value)
                             },
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                            shape = MaterialTheme.shapes.medium,
-                            tonalElevation = 2.dp
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
                         ) {
-                            Column(Modifier.padding(12.dp)) {
-                                Text(
-                                    barcode.formatName(),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Spacer(Modifier.height(2.dp))
-                                Text(
-                                    value,
-                                    style = MaterialTheme.typography.bodyMedium
+                            Row(
+                                modifier = Modifier.padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        barcode.formatName(),
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Spacer(Modifier.height(4.dp))
+                                    Text(
+                                        value,
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                                    )
+                                }
+                                Icon(
+                                    imageVector = Icons.Default.CheckCircle,
+                                    contentDescription = "Select",
+                                    tint = MaterialTheme.colorScheme.onPrimaryContainer
                                 )
                             }
                         }
@@ -275,16 +284,31 @@ fun ScannerScreen(
                 }
             },
             confirmButton = {
-                TextButton(onClick = {
-                    showPreview = false
-                    detectedBarcodes = emptyList()
-                    isScanning = true
-                }) { Text("Rescan") }
+                if (detectedBarcodes.size == 1) {
+                    val value = detectedBarcodes.first().rawValue?.trim() ?: ""
+                    Button(
+                        onClick = {
+                            showPreview = false
+                            imageAnalysisRef?.clearAnalyzer()
+                            onScanned(value)
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50))
+                    ) { 
+                        Text("Use This (Select)", color = Color.White) 
+                    }
+                } else {
+                    TextButton(onClick = {
+                        showPreview = false
+                        detectedBarcodes = emptyList()
+                        isScanning = true
+                    }) { Text("Rescan") }
+                }
             },
             dismissButton = {
                 TextButton(onClick = {
                     showPreview = false
-                    onBack()
+                    detectedBarcodes = emptyList()
+                    isScanning = true
                 }) { Text("Cancel") }
             }
         )
