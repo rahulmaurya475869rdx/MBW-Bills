@@ -8,7 +8,6 @@ import com.google.gson.Gson
 import com.mbwbill.app.data.AppDatabase
 import com.mbwbill.app.util.CloudinaryUploader
 import kotlinx.coroutines.tasks.await
-import java.io.File
 
 class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
@@ -16,9 +15,12 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
             val dao = AppDatabase.get(applicationContext).customerDao()
             val unsynced = dao.getUnsynced()
             val db = FirebaseFirestore.getInstance()
+            
             for (c in unsynced) {
                 val billUrls = uploadImages(c.billImages)
                 val warrantyUrls = uploadImages(c.warrantyImages)
+                
+                // Firestore document ID me createdAt use kiya taaki reinstall pe overwrite na ho
                 val data = hashMapOf(
                     "name" to c.name,
                     "address" to c.address,
@@ -30,11 +32,13 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
                     "warrantyImages" to warrantyUrls,
                     "createdAt" to c.createdAt
                 )
-                db.collection("customers").document(c.id.toString()).set(data).await()
+                
+                db.collection("customers").document(c.createdAt.toString()).set(data).await()
                 dao.markSynced(c.id)
             }
             Result.success()
         } catch (e: Exception) {
+            e.printStackTrace()
             Result.retry()
         }
     }
@@ -44,8 +48,7 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
         return try {
             val paths: Array<String> = Gson().fromJson(json, Array<String>::class.java)
             paths.mapNotNull { p ->
-                val f = File(p)
-                if (f.exists()) CloudinaryUploader.upload(f) else null
+                CloudinaryUploader.upload(applicationContext, p)
             }
         } catch (e: Exception) { emptyList() }
     }
