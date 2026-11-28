@@ -3,6 +3,11 @@ package com.mbwbill.app.util
 import android.content.Context
 import android.net.Uri
 import androidx.documentfile.provider.DocumentFile
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
+import com.mbwbill.app.data.Customer
+import java.io.InputStreamReader
+import java.io.OutputStreamWriter
 
 object StorageManager {
     private const val PREF_NAME = "app_prefs"
@@ -36,5 +41,49 @@ object StorageManager {
             imgFolder = appFolder.createDirectory("Images")
         }
         return imgFolder
+    }
+
+    // Naya function: Data ko JSON me save karna
+    fun saveBackupJson(context: Context, customers: List<Customer>) {
+        val appFolder = getOrCreateAppFolder(context) ?: return
+        var jsonFile = appFolder.findFile("customers_backup.json")
+        if (jsonFile == null) {
+            jsonFile = appFolder.createFile("application/json", "customers_backup.json")
+        }
+        if (jsonFile != null) {
+            try {
+                val outputStream = context.contentResolver.openOutputStream(jsonFile.uri, "wt")
+                if (outputStream != null) {
+                    outputStream.use { os ->
+                        val writer = OutputStreamWriter(os)
+                        val json = Gson().toJson(customers)
+                        writer.write(json)
+                        writer.flush()
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    // Naya function: JSON se data wapas padhna
+    fun loadBackupJson(context: Context): List<Customer>? {
+        val appFolder = getOrCreateAppFolder(context) ?: return null
+        val jsonFile = appFolder.findFile("customers_backup.json") ?: return null
+        return try {
+            val inputStream = context.contentResolver.openInputStream(jsonFile.uri)
+            if (inputStream != null) {
+                inputStream.use { isStream ->
+                    val reader = InputStreamReader(isStream)
+                    val type = object : TypeToken<List<Customer>>() {}.type
+                    val customers: List<Customer> = Gson().fromJson(reader, type)
+                    customers
+                }
+            } else null
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
+        }
     }
 }
