@@ -1,6 +1,7 @@
 package com.mbwbill.app.ui
 
 import android.Manifest
+import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -27,9 +28,6 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import coil.compose.AsyncImage
-import com.google.mlkit.vision.barcode.common.Barcode
-import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions
-import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
 import com.google.gson.Gson
 import com.mbwbill.app.data.Customer
 import com.mbwbill.app.util.ImageUtils
@@ -42,7 +40,10 @@ import java.io.File
 fun AddEditScreen(
     customerId: Long,
     viewModel: MainViewModel,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onScanSerial: () -> Unit, // 👈 Naya parameter
+    scannedSerial: String,    // 👈 Naya parameter
+    onScannedConsumed: () -> Unit // 👈 Naya parameter
 ) {
     val context = LocalContext.current
     var name by remember { mutableStateOf("") }
@@ -53,6 +54,14 @@ fun AddEditScreen(
     var dateOfInvoice by remember { mutableStateOf("") }
     var billImages by remember { mutableStateOf<List<String>>(emptyList()) }
     var warrantyImages by remember { mutableStateOf<List<String>>(emptyList()) }
+
+    // Scanner se aaya hua data yahan receive hoga
+    LaunchedEffect(scannedSerial) {
+        if (scannedSerial.isNotBlank()) {
+            serialNo = scannedSerial
+            onScannedConsumed()
+        }
+    }
 
     LaunchedEffect(customerId) {
         if (customerId > 0) {
@@ -99,17 +108,10 @@ fun AddEditScreen(
                     label = { Text("Serial No *") },
                     modifier = Modifier.weight(1f)
                 )
-                IconButton(onClick = {
-                    val options = GmsBarcodeScannerOptions.Builder()
-                        .setBarcodeFormats(Barcode.FORMAT_ALL_FORMATS)
-                        .enableAutoZoom()
-                        .build()
-                    GmsBarcodeScanning.getClient(context, options)
-                        .startScan()
-                        .addOnSuccessListener { barcode ->
-                            barcode.rawValue?.let { serialNo = it }
-                        }
-                }) { Icon(Icons.Default.QrCodeScanner, contentDescription = "Scan") }
+                // 👇 Apna custom scanner launch karne ke liye
+                IconButton(onClick = onScanSerial) { 
+                    Icon(Icons.Default.QrCodeScanner, contentDescription = "Scan") 
+                }
             }
             Spacer(Modifier.height(8.dp))
             OutlinedTextField(value = dateOfSale, onValueChange = { dateOfSale = it },
@@ -179,7 +181,7 @@ fun ImageListSection(
     val cropLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
-        if (result.resultCode == android.app.Activity.RESULT_OK && result.data != null) {
+        if (result.resultCode == Activity.RESULT_OK && result.data != null) {
             val outUri = UCrop.getOutput(result.data!!)
             if (outUri != null) {
                 val path = ImageUtils.compressAndSave(context, outUri)
