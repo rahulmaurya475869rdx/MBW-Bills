@@ -39,6 +39,7 @@ fun AppRoot() {
 
             NavHost(navController = nav, startDestination = "home") {
                 composable("home") { entry ->
+                    // Home screen search bar ke liye "scanned_result" use hota hai
                     val scannedResult by entry.savedStateHandle
                         .getStateFlow("scanned_result", "")
                         .collectAsState()
@@ -64,7 +65,7 @@ fun AppRoot() {
                 ) { entry ->
                     val id = entry.arguments?.getLong("id") ?: 0L
 
-                    // Scan result with index — stored in savedStateHandle
+                    // Add/Edit screen multiple serials ke liye "scanned_index" aur "scanned_value" use hota hai
                     val scannedIndex by entry.savedStateHandle
                         .getStateFlow("scanned_index", -1)
                         .collectAsState()
@@ -77,7 +78,6 @@ fun AppRoot() {
                         viewModel = vm,
                         onBack = { nav.popBackStack() },
                         onScanSerial = { index ->
-                            // scanIndex ko savedStateHandle me save karo
                             entry.savedStateHandle["pending_scan_index"] = index
                             nav.navigate("scanner")
                         },
@@ -107,12 +107,20 @@ fun AppRoot() {
                     ScannerScreen(
                         onBack = { nav.popBackStack() },
                         onScanned = { result ->
-                            val editEntry = nav.previousBackStackEntry
-                            val pendingIndex = editEntry?.savedStateHandle
-                                ?.get<Int>("pending_scan_index") ?: 0
-                            editEntry?.savedStateHandle?.set("scanned_index", pendingIndex)
-                            editEntry?.savedStateHandle?.set("scanned_value", result)
-                            editEntry?.savedStateHandle?.remove<Int>("pending_scan_index")
+                            val previousEntry = nav.previousBackStackEntry
+                            
+                            // 👇 FIX: Check karo ki scan kahan se aaya hai
+                            if (previousEntry?.savedStateHandle?.contains("pending_scan_index") == true) {
+                                // Scan aaya hai Add/Edit Screen se (Serial Number ke liye)
+                                val pendingIndex = previousEntry.savedStateHandle.get<Int>("pending_scan_index") ?: 0
+                                previousEntry.savedStateHandle["scanned_index"] = pendingIndex
+                                previousEntry.savedStateHandle["scanned_value"] = result
+                                previousEntry.savedStateHandle.remove<Int>("pending_scan_index")
+                            } else {
+                                // Scan aaya hai Home Screen se (Search Bar ke liye)
+                                previousEntry?.savedStateHandle?.set("scanned_result", result)
+                            }
+                            
                             nav.popBackStack()
                         }
                     )
