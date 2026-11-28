@@ -29,7 +29,9 @@ import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
+import com.google.mlkit.vision.barcode.BarcodeScannerOptions
 import com.google.mlkit.vision.barcode.BarcodeScanning
+import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.common.InputImage
 import java.util.concurrent.Executors
 
@@ -62,17 +64,30 @@ fun ScannerScreen(
     }
 
     val cameraProviderFuture = remember { ProcessCameraProvider.getInstance(context) }
-    val barcodeScanner = remember { BarcodeScanning.getClient() }
     val cameraExecutor = remember { Executors.newSingleThreadExecutor() }
     var isScanning by remember { mutableStateOf(true) }
+    var imageAnalysisRef by remember { mutableStateOf<ImageAnalysis?>(null) }
 
-    // Green Line Animation
+    // 👇 Format restrict kiya taaki galat scan na ho
+    val barcodeScanner = remember {
+        val options = BarcodeScannerOptions.Builder()
+            .setBarcodeFormats(
+                Barcode.FORMAT_CODE_128,
+                Barcode.FORMAT_CODE_39,
+                Barcode.FORMAT_EAN_13,
+                Barcode.FORMAT_QR_CODE,
+                Barcode.FORMAT_DATA_MATRIX
+            )
+            .build()
+        BarcodeScanning.getClient(options)
+    }
+
     val infiniteTransition = rememberInfiniteTransition(label = "scanLine")
     val scanLineY by infiniteTransition.animateFloat(
         initialValue = 0f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
-            animation = tween(2000, easing = LinearEasing),
+            animation = tween(1500, easing = LinearEasing), // Thoda fast animation
             repeatMode = RepeatMode.Reverse
         ),
         label = "scanLineY"
@@ -90,6 +105,7 @@ fun ScannerScreen(
                     val imageAnalysis = ImageAnalysis.Builder()
                         .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                         .build()
+                    imageAnalysisRef = imageAnalysis
 
                     imageAnalysis.setAnalyzer(cameraExecutor) { imageProxy ->
                         val mediaImage = imageProxy.image
@@ -101,6 +117,7 @@ fun ScannerScreen(
                                         val rawValue = barcodes.first().rawValue
                                         if (!rawValue.isNullOrBlank()) {
                                             isScanning = false
+                                            imageAnalysis.clearAnalyzer() // 👈 Analyzer clear kiya taaki baar baar scan na kare
                                             onScanned(rawValue)
                                         }
                                     }
@@ -131,12 +148,14 @@ fun ScannerScreen(
             val boxSize = size.width * 0.75f
             val left = (size.width - boxSize) / 2
             val top = (size.height - boxSize) / 2
+            
+            // 👇 Background ekdum dark (0.95f) kar diya
+            val darkColor = Color.Black.copy(alpha = 0.95f)
 
-            // Dark Area
-            drawRect(Color.Black.copy(alpha = 0.7f), size = Size(size.width, top))
-            drawRect(Color.Black.copy(alpha = 0.7f), topLeft = Offset(0f, top + boxSize), size = Size(size.width, size.height - top - boxSize))
-            drawRect(Color.Black.copy(alpha = 0.7f), topLeft = Offset(0f, top), size = Size(left, boxSize))
-            drawRect(Color.Black.copy(alpha = 0.7f), topLeft = Offset(left + boxSize, top), size = Size(size.width - left - boxSize, boxSize))
+            drawRect(darkColor, size = Size(size.width, top))
+            drawRect(darkColor, topLeft = Offset(0f, top + boxSize), size = Size(size.width, size.height - top - boxSize))
+            drawRect(darkColor, topLeft = Offset(0f, top), size = Size(left, boxSize))
+            drawRect(darkColor, topLeft = Offset(left + boxSize, top), size = Size(size.width - left - boxSize, boxSize))
 
             // Green Border
             drawRect(Color.Green, topLeft = Offset(left, top), size = Size(boxSize, boxSize), style = Stroke(width = 5.dp.toPx()))
@@ -146,13 +165,12 @@ fun ScannerScreen(
             drawLine(Color.Green, start = Offset(left, lineY), end = Offset(left + boxSize, lineY), strokeWidth = 4.dp.toPx())
         }
 
-        // Close Button
         IconButton(
             onClick = onBack,
             modifier = Modifier
                 .align(Alignment.TopStart)
                 .padding(16.dp)
-                .background(Color.Black.copy(alpha = 0.5f), shape = CircleShape)
+                .background(Color.Black.copy(alpha = 0.7f), shape = CircleShape)
         ) {
             Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White)
         }
@@ -167,6 +185,7 @@ fun ScannerScreen(
 
     DisposableEffect(Unit) {
         onDispose {
+            imageAnalysisRef?.clearAnalyzer()
             cameraExecutor.shutdown()
             barcodeScanner.close()
         }
