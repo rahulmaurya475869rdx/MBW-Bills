@@ -39,12 +39,16 @@ fun AppRoot() {
             NavHost(navController = nav, startDestination = "home") {
                 composable("home") {
                     val scannedResult = nav.currentBackStackEntry?.savedStateHandle?.getStateFlow("scanned_result", "")?.collectAsState()
+                    
                     LaunchedEffect(scannedResult?.value) {
-                        if (!scannedResult?.value.isNullOrBlank()) {
-                            vm.setQuery(scannedResult.value)
+                        // 👇 Yahan safe call (?.value) lagaya gaya hai
+                        val result = scannedResult?.value
+                        if (!result.isNullOrBlank()) {
+                            vm.setQuery(result)
                             nav.currentBackStackEntry?.savedStateHandle?.remove<String>("scanned_result")
                         }
                     }
+                    
                     HomeScreen(
                         viewModel = vm,
                         onAdd = { nav.navigate("edit/0") },
@@ -52,21 +56,25 @@ fun AppRoot() {
                         onScan = { nav.navigate("scanner") }
                     )
                 }
+                
                 composable(
                     "edit/{id}",
                     arguments = listOf(navArgument("id") { type = NavType.LongType })
                 ) { entry ->
                     val id = entry.arguments?.getLong("id") ?: 0L
                     val scannedResult = nav.currentBackStackEntry?.savedStateHandle?.getStateFlow("scanned_result", "")?.collectAsState()
+                    
                     AddEditScreen(
                         customerId = id,
                         viewModel = vm,
                         onBack = { nav.popBackStack() },
                         onScanSerial = { nav.navigate("scanner") },
+                        // 👇 Yahan safe call lagaya gaya hai
                         scannedSerial = scannedResult?.value ?: "",
                         onScannedConsumed = { nav.currentBackStackEntry?.savedStateHandle?.remove<String>("scanned_result") }
                     )
                 }
+                
                 composable(
                     "detail/{id}",
                     arguments = listOf(navArgument("id") { type = NavType.LongType })
@@ -79,6 +87,7 @@ fun AppRoot() {
                         onEdit = { nav.navigate("edit/$id") }
                     )
                 }
+                
                 composable("scanner") {
                     ScannerScreen(
                         onBack = { nav.popBackStack() },
