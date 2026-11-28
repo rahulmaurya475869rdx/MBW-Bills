@@ -6,6 +6,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.*
@@ -20,14 +21,14 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.work.*
 import com.mbwbill.app.sync.SyncWorker
 import com.mbwbill.app.viewmodel.MainViewModel
-import java.util.concurrent.TimeUnit
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     viewModel: MainViewModel,
     onAdd: () -> Unit,
-    onOpen: (Long) -> Unit
+    onOpen: (Long) -> Unit,
+    onScan: () -> Unit // 👈 Naya parameter
 ) {
     val context = LocalContext.current
     val query by viewModel.searchQuery.collectAsStateWithLifecycle()
@@ -76,6 +77,12 @@ fun HomeScreen(
                 modifier = Modifier.fillMaxWidth().padding(12.dp),
                 placeholder = { Text("Naam, mobile ya serial no search karo") },
                 leadingIcon = { Icon(Icons.Default.Search, null) },
+                trailingIcon = {
+                    // 👇 Search bar me Scanner Icon
+                    IconButton(onClick = onScan) {
+                        Icon(Icons.Default.QrCodeScanner, contentDescription = "Scan Search", tint = MaterialTheme.colorScheme.primary)
+                    }
+                },
                 singleLine = true
             )
 
