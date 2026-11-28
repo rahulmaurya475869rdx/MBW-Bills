@@ -57,7 +57,6 @@ fun AddEditScreen(
     var address by remember { mutableStateOf("") }
     var mobile by remember { mutableStateOf("") }
     
-    // Multiple Serial Numbers ki list
     var serialList by remember { mutableStateOf(listOf("")) }
     var scanIndex by remember { mutableStateOf(0) }
     
@@ -66,10 +65,8 @@ fun AddEditScreen(
     var billImages by remember { mutableStateOf<List<String>>(emptyList()) }
     var warrantyImages by remember { mutableStateOf<List<String>>(emptyList()) }
 
-    // Full Screen Image Dialog ke liye
     var fullScreenImage by remember { mutableStateOf<String?>(null) }
 
-    // Scanner se aaya hua data yahan fill hoga (specific index par)
     LaunchedEffect(scannedSerial) {
         if (scannedSerial.isNotBlank()) {
             val newList = serialList.toMutableList()
@@ -87,7 +84,6 @@ fun AddEditScreen(
         if (customerId > 0) {
             viewModel.getById(customerId)?.let { c ->
                 name = c.name; address = c.address; mobile = c.mobile
-                // Purane comma-separated serials ko list mein split karo
                 serialList = c.serialNo.split(",").map { it.trim() }.ifEmpty { listOf("") }
                 dateOfSale = c.dateOfSale; dateOfInvoice = c.dateOfInvoice
                 billImages = parseList(c.billImages)
@@ -101,7 +97,9 @@ fun AddEditScreen(
             TopAppBar(
                 title = { Text(if (customerId == 0L) "Naya Customer" else "Edit Customer") },
                 navigationIcon = {
-                    IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, null) }
+                    IconButton(onClick = onBack) { 
+                        Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "Back") 
+                    }
                 }
             )
         }
@@ -123,7 +121,6 @@ fun AddEditScreen(
                 label = { Text("Mobile Number *") }, modifier = Modifier.fillMaxWidth())
             Spacer(Modifier.height(12.dp))
 
-            // Multiple Serial Number Fields
             Text("Serial No (Max 5)", fontSize = 14.sp, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(4.dp))
             serialList.forEachIndexed { index, serial ->
@@ -139,17 +136,20 @@ fun AddEditScreen(
                     IconButton(onClick = {
                         scanIndex = index
                         onScanSerial()
-                    }) { Icon(Icons.Default.QrCodeScanner, contentDescription = "Scan") }
+                    }) { 
+                        Icon(imageVector = Icons.Default.QrCodeScanner, contentDescription = "Scan") 
+                    }
                     
                     if (serialList.size > 1) {
                         IconButton(onClick = {
                             serialList = serialList.toMutableList().also { it.removeAt(index) }
-                        }) { Icon(Icons.Default.Delete, tint = MaterialTheme.colorScheme.error) }
+                        }) { 
+                            Icon(imageVector = Icons.Default.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.error) 
+                        }
                     }
                 }
             }
             if (serialList.size < 5) {
-                // 👇 Yahan Icon hata kar simple Text laga diya hai
                 TextButton(onClick = { serialList = serialList + "" }) {
                     Text("+ Add Another Serial No", fontSize = 14.sp)
                 }
@@ -211,13 +211,12 @@ fun AddEditScreen(
         }
     }
 
-    // Full Screen Image Dialog
     if (fullScreenImage != null) {
         Dialog(onDismissRequest = { fullScreenImage = null }) {
             Box(Modifier.fillMaxSize().background(Color.Black).clickable { fullScreenImage = null }) {
                 AsyncImage(
                     model = File(fullScreenImage!!),
-                    contentDescription = null,
+                    contentDescription = "Full Screen Image",
                     modifier = Modifier.fillMaxWidth().align(Alignment.Center),
                     contentScale = ContentScale.Fit
                 )
@@ -225,7 +224,7 @@ fun AddEditScreen(
                     onClick = { fullScreenImage = null },
                     modifier = Modifier.align(Alignment.TopEnd).padding(16.dp)
                 ) {
-                    Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White)
+                    Icon(imageVector = Icons.Default.Close, contentDescription = "Close", tint = Color.White)
                 }
             }
         }
@@ -299,13 +298,15 @@ fun ImageListSection(
                     Box {
                         AsyncImage(
                             model = File(path),
-                            contentDescription = null,
+                            contentDescription = "Image",
                             modifier = Modifier.size(90.dp).clickable { onImageClick(path) }
                         )
                         IconButton(
                             onClick = { onRemove(i) },
                             modifier = Modifier.size(24.dp).align(Alignment.TopEnd)
-                        ) { Icon(Icons.Default.Close, null, tint = MaterialTheme.colorScheme.error) }
+                        ) { 
+                            Icon(imageVector = Icons.Default.Close, contentDescription = "Remove", tint = MaterialTheme.colorScheme.error) 
+                        }
                     }
                 }
             }
