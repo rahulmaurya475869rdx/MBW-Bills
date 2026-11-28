@@ -17,7 +17,6 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
@@ -150,15 +149,9 @@ fun AddEditScreen(
                 }
             }
             if (serialList.size < 5) {
+                // 👇 Yahan Icon hata kar simple Text laga diya hai
                 TextButton(onClick = { serialList = serialList + "" }) {
-                    // 👇 Yahan explicit imageVector use kiya hai
-                    Icon(
-                        imageVector = Icons.Filled.Add,
-                        contentDescription = "Add Serial",
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(Modifier.width(4.dp))
-                    Text("Add Another Serial No")
+                    Text("+ Add Another Serial No", fontSize = 14.sp)
                 }
             }
 
